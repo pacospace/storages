@@ -2277,32 +2277,34 @@ class GraphDatabase(StorageBase):
             tot_nodes_per_label[node_label] = count
         return tot_nodes_per_label
 
-    def get_python_artifact_vertex_instances_count(self) -> int:
-        """Retrieve total number of nodes per python_artifact in the graph database."""
-        query = (
-            """
-            {
-                f(func: has(%s)) {
-                    c:count(uid)
-                }
-            }
-            """
-            % PythonArtifact.get_label()
-        )
-        result = self._query_raw(query)
-        return result["f"][0]["c"]
+    def get_number_of_os_in_graph_count(self) -> dict:
+        """Retrieve number of OS in the graph database."""
 
-    def get_python_package_version_instances_count(self) -> int:
-        """Retrieve total number of nodes for PythonPackageVersion in the graph database."""
         query = (
             """
-            {
-                f(func: has(%s)) {
-                    c:count(uid)
-                }
+        {
+            f(func: has(%s)) {
+                environment_name
             }
-            """
-            % PythonPackageVersion.get_label()
+        }
+        """
+            % RuntimeEnvironmentModel.get_label()
         )
         result = self._query_raw(query)
-        return result["f"][0]["c"]
+        return len(set([os_env["environment_name"] for os_env in result["f"]]))
+
+    def get_all_os_in_graph(self) -> dict:
+        """Retrieve all OS in the graph database."""
+
+        query = (
+            """
+        {
+            f(func: has(%s)) {
+                environment_name
+            }
+        }
+        """
+            % RuntimeEnvironmentModel.get_label()
+        )
+        result = self._query_raw(query)
+        return set([os_env["environment_name"] for os_env in result["f"]])
