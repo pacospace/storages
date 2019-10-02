@@ -32,3 +32,27 @@ class SchemaError(ThothStorageException):
 
 class CacheMiss(ThothStorageException):
     """Raised if the requested document was not found in the cache."""
+
+
+class NotConnected(ThothStorageException):
+    """Raised if there was no connection established when communicating with a storage."""
+
+
+class MultipleFoundError(ThothStorageException):
+    """Raised if there are multiple entities in the graph database when querying for a single one."""
+
+
+class PythonIndexNotRegistered(ThothStorageException):
+    """Raised if an attempt to insert a Python package with an index not being registered to the system."""
+
+
+class RetryTransaction(ThothStorageException):
+    """Raised if number of retries when syncing data into Dgraph exceeded client should retry after some time."""
+
+
+class UnboundModel(ThothStorageException):
+    """Raised if there are done operations on models which do not link to objects stored inside database."""
+
+
+class PerformanceIndicatorNotRegistered(ThothStorageException):
+    """Raised if a performance indicator model which is about to be synced was not found."""

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # thoth-storages
-# Copyright(C) 2018, 2019 Fridolin Pokorny
+# Copyright(C) 2019 Fridolin Pokorny
 #
 # This program is free software: you can redistribute it and / or modify
 # it under the terms of the GNU General Public License as published by
@@ -15,107 +15,88 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-"""A base classes for model representation."""
+"""A base and utilities for implementing SQLAlchemy based models."""
 
-import asyncio
+import logging
+from typing import Union
+from itertools import combinations
+from typing import List
 
-from goblin import Vertex
-from goblin import VertexProperty
-from goblin import Edge
+from sqlalchemy import Index
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import class_mapper
+from sqlalchemy.orm import ColumnProperty
+from sqlalchemy.exc import IntegrityError
 
-from aiogremlin.process.graph_traversal import AsyncGraphTraversalSource
+
+Base = declarative_base()
 
 
-class VertexBase(Vertex):
-    """A base class for edges that extends Goblin's vertex implementation."""
+_LOGGER = logging.getLogger(__name__)
 
-    # Vertex cache to be used.
-    cache = None
 
-    def __repr__(self):
-        """Show vertex representation."""
-        values = ""
-        for key, value in self.to_dict().items():
-            if key.startswith("__"):
-                continue
-            values += "{}={}, ".format(key, repr(value) if isinstance(value, str) else value)
+class BaseExtension:
+    """Extend base class with additional functionality."""
 
-        return f"{self.__class__.__name__}({values[:-2]})"
+    @classmethod
+    def get_or_create(cls, session, **kwargs):
+        """Query for the given entity, create if it does not exist yet."""
+        instance = session.query(cls).filter_by(**kwargs).first()
+        if instance:
+            return instance, True
+        else:
+            try:
+                session.begin_nested()
+                instance = cls(**kwargs)
+                session.add(instance)
+                session.commit()
+                return instance, False
+            except IntegrityError as exc:
+                session.rollback()
+                _LOGGER.warning(
+                    "Integrity error on creating a new record; this can be due to "
+                    "concurrent writes to database, recovering (attributes: %r): %s",
+                    kwargs,
+                    str(exc),
+                )
+                return session.query(cls).filter_by(**kwargs).one(), True
 
-    def to_pretty_dict(self) -> dict:
-        """Return a dict representation of this object.
+    @classmethod
+    def attribute_names(cls):
+        """Get names of attributes for the given model declaration."""
+        return [prop.key for prop in class_mapper(cls).iterate_properties if isinstance(prop, ColumnProperty)]
 
-        It can be exposed on API endpoints directly.
-        """
+    def to_dict(self, without_id: bool = True) -> dict:
+        """Convert model to a dictionary representation keeping just rows as attributes."""
         result = {}
+        for column in self.__table__.columns:
+            if without_id and column.name == "id":
+                continue
 
-        for property_name, property_value in self.__properties__.items():
-            if isinstance(property_value, VertexProperty):
-                prop = getattr(self, property_name, None)
-                result[property_name] = prop.value if prop else None
+            result[column.name] = str(getattr(self, column.name))
 
         return result
 
-    # pylint: disable=invalid-name
-    def get_or_create(self, g: AsyncGraphTraversalSource) -> bool:
-        """Get or create this vertex."""
-        # Avoid cyclic imports due to typing.
-        from .utils import get_or_create_vertex
 
-        loop = asyncio.get_event_loop()
-        _, existed = loop.run_until_complete(get_or_create_vertex(g, self))
-        return existed
+def get_python_package_version_index_combinations(*, index_as_property: bool = True) -> List[Index]:
+    """Create index for all possible combinations which we can query."""
+    result = []
+    _columns_to_variate = (
+        "index_url" if index_as_property else "python_package_index_id",
+        "os_name",
+        "os_version",
+        "python_version",
+    )
+    for i in range(1, len(_columns_to_variate)):
+        for j, variation in enumerate(combinations(_columns_to_variate, i)):
+            result.append(
+                Index(
+                    f"python_package_version_index_idx_{i}{j}",
+                    "package_name",
+                    "package_version",
+                    "index_url" if index_as_property else "python_package_index_id",
+                    *variation,
+                )
+            )
 
-    @classmethod
-    def from_properties(cls, **vertex_properties):
-        """Create a vertex based on its properties."""
-        instance = cls()
-
-        for attr, value in vertex_properties.items():
-            # Ensure that the instance has the given attribute.
-            getattr(instance, attr)
-            setattr(instance, attr, value)
-
-        return instance
-
-
-class EdgeBase(Edge):
-    """A base class for edges that extends Goblin's edge implementation."""
-
-    # Edge cache to be used.
-    cache = None
-
-    def __repr__(self):  # Ignore PyDocStyleBear
-        values = ""
-        for key, value in self.to_dict().items():
-            if key.startswith("__"):
-                continue
-            values += "{}={}, ".format(key, repr(value) if isinstance(value, str) else value)
-
-        return f"{self.__class__.__name__}({values[:-2]})"
-
-    # pylint: disable=invalid-name
-    def get_or_create(self, g: AsyncGraphTraversalSource) -> bool:
-        """Get or create a this edge."""
-        # Avoid cyclic imports due to typing.
-        from .utils import get_or_create_edge
-
-        loop = asyncio.get_event_loop()
-        _, existed = loop.run_until_complete(get_or_create_edge(g, self))
-
-        return existed
-
-    @classmethod
-    def from_properties(cls, **edge_properties):
-        """Create edge based on its properties.
-
-        >>> source_node = PackageVersion.from_properties(ecosystem='pypi', name='selinon', version='1.0.0rc1')
-        >>> target_node = PackageVersion.from_properties(ecosystem='pypi', name='pyyaml', version='1.0.0')
-        >>> edge = DependsOn.from_properties(version_range='>=10', source=source_node, target=target_node)
-        """
-        instance = cls()
-
-        for attr, value in edge_properties.items():
-            setattr(instance, attr, value)
-
-        return instance
+    return result

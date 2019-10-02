@@ -14,3 +14,21 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+"""Test related to graph database.
+
+As most of the queries directly prepare results using graphql, there are
+stated just tests which require some additional post-processing logic.
+"""
+
+from pydgraph import DgraphClientStub
+
+from thoth.storages import GraphDatabase
+
+
+class TestGraphDatabase:
+    """Test graph database adapter."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.client = DgraphClientStub("localhost:9080")

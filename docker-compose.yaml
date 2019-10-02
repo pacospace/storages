@@ -1,0 +1,24 @@
+version: '3'
+services:
+  postgres:
+    image: postgres:9.5
+    container_name: postgres
+    restart: on-failure
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+  pgweb:
+    image: sosedoff/pgweb
+    container_name: pgweb
+    restart: on-failure
+    links:
+      - postgres
+    ports:
+      - 8081:8081
+    environment:
+      # sslmode=disable because: https://github.com/sosedoff/pgweb/issues/23#issuecomment-60840307
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable
+
