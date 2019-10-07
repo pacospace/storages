@@ -550,6 +550,214 @@ class GraphDatabase(SQLBase):
 
         return query.count()
 
+    def get_solved_python_packages_all(
+        self,
+        *,
+        start_offset: int = 0,
+        count: int = _DEFAULT_COUNT,
+        os_name: str = None,
+        os_version: str = None,
+        python_version: str = None,
+        distinct: bool = False,
+    ) -> List[Tuple[str, str]]:
+        """Retrieve solved Python package with index in Thoth Database."""
+        result = self.__class__.get_python_packages_all(**locals())
+
+        return result
+
+    def _construct_solved_python_packages_query(
+        self,
+        os_name: str = None,
+        os_version: str = None,
+        python_version: str = None
+    ) -> Query:
+        """Construct query for solved Python packages functions, the query is not executed."""
+        result = self.__class__._construct_python_packages_query(**locals())
+
+        return result
+
+    def get_solved_python_packages_count_all(
+        self,
+        *,
+        os_name: str = None,
+        os_version: str = None,
+        python_version: str = None,
+        distinct: bool = False,
+    ) -> int:
+        """Retrieve number of versions per solved Python package in Thoth Database."""
+        query = self._construct_solved_python_packages_query(
+            os_name=os_name,
+            os_version=os_version,
+            python_version=python_version
+            )
+
+        if distinct:
+            query.distinct()
+
+        query = query.count()
+
+        return query
+
+    def get_solved_python_packages_all_versions(
+        self,
+        *,
+        start_offset: int = 0,
+        count: int = _DEFAULT_COUNT,
+        os_name: str = None,
+        os_version: str = None,
+        python_version: str = None,
+        distinct: bool = False,
+    ) -> Dict[str, List[Tuple[str, str]]]:
+        """Retrieve solved Python package versions per package in Thoth Database."""
+        query = self._construct_solved_python_packages_query(
+            os_name=os_name,
+            os_version=os_version,
+            python_version=python_version
+            )
+
+        query = query.offset(start_offset).limit(count)
+
+        if distinct:
+            query.distinct()
+
+        query = query.all()
+
+        query_result = {}
+
+        for item in query:
+            if item[0] not in query_result.keys():
+                query_result[item[0]] = []
+                query_result[item[0]].append((item[1], item[2]))
+            else:
+                query_result[item[0]].append((item[1], item[2]))
+
+        return query_result
+
+    def get_unsolved_python_packages_all(
+        self,
+        *,
+        start_offset: int = 0,
+        count: int = _DEFAULT_COUNT,
+        os_name: str = None,
+        os_version: str = None,
+        python_version: str = None,
+        distinct: bool = False,
+    ) -> List[Tuple[str, str]]:
+        """Retrieve unsolved Python package with index in Thoth Database."""
+        solved = self._session.query(PythonPackageVersion.package_name, PythonPackageVersion.package_version)
+
+        subquery = solved.subquery()
+        query = (
+            self._session.query(PythonPackageVersionEntity)
+            .join(PythonPackageIndex)
+            .filter(
+                tuple_(PythonPackageVersionEntity.package_name, PythonPackageVersionEntity.package_version).notin_(
+                    solved
+                )
+            )
+            .with_entities(PythonPackageVersionEntity.package_name, PythonPackageIndex.url)
+        )
+
+        query = query.offset(start_offset).limit(count)
+
+        if distinct:
+            query.distinct()
+
+        query = query.all()
+
+        return query
+
+    def _construct_unsolved_python_packages_query(
+        self,
+        os_name: str = None,
+        os_version: str = None,
+        python_version: str = None
+    ) -> Query:
+        """Construct query for unsolved Python packages functions, the query is not executed."""
+        query = (
+            self._session.query(PythonPackageVersion)
+            .join(PythonPackageIndex)
+            .filter(PythonPackageVersion.os_name.isnot(None))
+            .filter(PythonPackageVersion.os_version.isnot(None))
+            .filter(PythonPackageVersion.python_version.isnot(None))
+            .with_entities(
+                PythonPackageVersion.package_name,
+                PythonPackageVersion.package_version,
+                PythonPackageIndex.url)
+            .group_by(
+                PythonPackageVersion.package_name,
+                PythonPackageVersion.package_version,
+                PythonPackageIndex.url)
+            )
+
+        if os_name is not None:
+            query = query.filter(PythonPackageVersion.os_name == os_name)
+
+        if os_version is not None:
+            query = query.filter(PythonPackageVersion.os_version == os_version)
+
+        if python_version is not None:
+            query = query.filter(PythonPackageVersion.python_version == python_version)
+
+        return query
+
+    def get_unsolved_python_packages_count_all(
+        self,
+        *,
+        os_name: str = None,
+        os_version: str = None,
+        python_version: str = None,
+        distinct: bool = False,
+    ) -> int:
+        """Retrieve number of versions per unsolved Python package in Thoth Database."""
+        query = self._construct_unsolved_python_packages_query(
+            os_name=os_name,
+            os_version=os_version,
+            python_version=python_version
+            )
+
+        if distinct:
+            query.distinct()
+
+        query = query.count()
+
+        return query
+
+    def get_unsolved_python_packages_all_versions(
+        self,
+        *,
+        start_offset: int = 0,
+        count: int = _DEFAULT_COUNT,
+        os_name: str = None,
+        os_version: str = None,
+        python_version: str = None,
+        distinct: bool = False,
+    ) -> Dict[str, List[Tuple[str, str]]]:
+        """Retrieve unsolved Python package versions per package in Thoth Database."""
+        query = self._construct_unsolved_python_packages_query(
+            os_name=os_name,
+            os_version=os_version,
+            python_version=python_version
+            )
+
+        query = query.offset(start_offset).limit(count)
+
+        if distinct:
+            query.distinct()
+
+        query = query.all()
+
+        query_result = {}
+
+        for item in query:
+            if item[0] not in query_result.keys():
+                query_result[item[0]] = []
+                query_result[item[0]].append((item[1], item[2]))
+            else:
+                query_result[item[0]].append((item[1], item[2]))
+
+        return query_result
+
     def retrieve_unanalyzed_python_package_versions(
         self,
         start_offset: int = 0,
