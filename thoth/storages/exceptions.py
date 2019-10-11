@@ -46,13 +46,17 @@ class PythonIndexNotRegistered(ThothStorageException):
     """Raised if an attempt to insert a Python package with an index not being registered to the system."""
 
 
-class RetryTransaction(ThothStorageException):
-    """Raised if number of retries when syncing data into Dgraph exceeded client should retry after some time."""
-
-
 class UnboundModel(ThothStorageException):
     """Raised if there are done operations on models which do not link to objects stored inside database."""
 
 
 class PerformanceIndicatorNotRegistered(ThothStorageException):
     """Raised if a performance indicator model which is about to be synced was not found."""
+
+
+class PythonIndexNotProvided(ThothStorageException):
+    """Raised if an attempt to insert a package without an index."""
+
+
+class SolverNotRun(ThothStorageException):
+    """Raised if an attempt to insert a package which was not solved."""
