@@ -3455,7 +3455,7 @@ class GraphDatabase(SQLBase):
             image_name=None,
             image_sha=None,
             os_name=os.get("name"),
-            os_version=os.get("version"),
+            os_version=normalize_os_version(os.get("version")),
             cuda_version=runtime_environment.get("cuda_version"),
             environment_type=environment_type,
         )
