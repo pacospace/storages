@@ -3752,7 +3752,6 @@ class GraphDatabase(SQLBase):
 
         return inspection_runs
 
-
     def sync_inspection_result(self, document) -> None:
         """Sync the given inspection document into the graph database."""
         # Check if we have such performance model before creating any other records.
