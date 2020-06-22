@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # thoth-storages
-# Copyright(C) 2018, 2019 Fridolin Pokorny
+# Copyright(C) 2018, 2019, 2020 Fridolin Pokorny
 #
 # This program is free software: you can redistribute it and / or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,18 +18,17 @@
 """Routines for syncing data from Ceph into graph database."""
 
 import logging
+import json
+import os
 from typing import Dict
 from typing import Tuple
-
-from amun import get_inspection_build_log
-from amun import get_inspection_job_log
-from amun import get_inspection_specification
-from amun import get_inspection_status
-from amun import is_inspection_finished
-from amun import has_inspection_job
+from typing import List
+from typing import Optional
 
 from .solvers import SolverResultsStore
+from .revsolvers import RevSolverResultsStore
 from .analyses import AnalysisResultsStore
+from .buildlogs_analyses import BuildLogsAnalysisResultsStore
 from .package_analyses import PackageAnalysisResultsStore
 from .advisers import AdvisersResultsStore
 from .inspections import InspectionResultsStore
@@ -41,31 +40,42 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def sync_adviser_documents(
-    document_ids: list = None,
+    document_ids: Optional[List[str]] = None,
     force: bool = False,
     graceful: bool = False,
-    graph: GraphDatabase = None,
+    graph: Optional[GraphDatabase] = None,
+    is_local: bool = False,
 ) -> tuple:
     """Sync adviser documents into graph."""
+    if is_local and not document_ids:
+        raise ValueError(
+            "Cannot sync documents from local directory without explicitly specifying a list of documents to be synced"
+        )
+
     if not graph:
         graph = GraphDatabase()
         graph.connect()
 
-    adviser_store = AdvisersResultsStore()
-    adviser_store.connect()
+    if not is_local:
+        adviser_store = AdvisersResultsStore()
+        adviser_store.connect()
 
     processed, synced, skipped, failed = 0, 0, 0, 0
     for document_id in document_ids or adviser_store.get_document_listing():
         processed += 1
 
-        if force or not graph.adviser_document_id_exist(document_id):
-            _LOGGER.info(
-                f"Syncing adviser document from {adviser_store.ceph.host} "
-                f"with id {document_id!r} to graph"
-            )
-
+        if force or not graph.adviser_document_id_exist(os.path.basename(document_id)):
             try:
-                document = adviser_store.retrieve_document(document_id)
+                if is_local:
+                    _LOGGER.debug("Loading document from a local file: %r", document_id)
+                    with open(document_id, "r") as document_file:
+                        document = json.loads(document_file.read())
+                else:
+                    _LOGGER.info(
+                        "Syncing adviser document from %r with id %r to graph", adviser_store.ceph.host, document_id
+                    )
+                    document = adviser_store.retrieve_document(document_id)
+
                 graph.sync_adviser_result(document)
                 synced += 1
             except Exception:
@@ -82,30 +92,41 @@ def sync_adviser_documents(
 
 
 def sync_solver_documents(
-    document_ids: list = None,
+    document_ids: Optional[List[str]] = None,
     force: bool = False,
     graceful: bool = False,
-    graph: GraphDatabase = None,
+    graph: Optional[GraphDatabase] = None,
+    is_local: bool = False,
 ) -> tuple:
     """Sync solver documents into graph."""
+    if is_local and not document_ids:
+        raise ValueError(
+            "Cannot sync documents from local directory without explicitly specifying a list of documents to be synced"
+        )
+
     if not graph:
         graph = GraphDatabase()
         graph.connect()
 
-    solver_store = SolverResultsStore()
-    solver_store.connect()
+    if not is_local:
+        solver_store = SolverResultsStore()
+        solver_store.connect()
 
     processed, synced, skipped, failed = 0, 0, 0, 0
     for document_id in document_ids or solver_store.get_document_listing():
         processed += 1
-        if force or not graph.solver_document_id_exist(document_id):
-            _LOGGER.info(
-                f"Syncing solver document from {solver_store.ceph.host} "
-                f"with id {document_id!r} to graph"
-            )
-
+        if force or not graph.solver_document_id_exist(os.path.basename(document_id)):
             try:
-                document = solver_store.retrieve_document(document_id)
+                if is_local:
+                    _LOGGER.debug("Loading document from a local file: %r", document_id)
+                    with open(document_id, "r") as document_file:
+                        document = json.loads(document_file.read())
+                else:
+                    _LOGGER.info(
+                        "Syncing solver document from %r with id %r to graph", solver_store.ceph.host, document_id
+                    )
+                    document = solver_store.retrieve_document(document_id)
+
                 graph.sync_solver_result(document)
                 synced += 1
             except Exception:
@@ -121,32 +142,92 @@ def sync_solver_documents(
     return processed, synced, skipped, failed
 
 
-def sync_analysis_documents(
-    document_ids: list = None,
+def sync_revsolver_documents(
+    document_ids: Optional[List[str]] = None,
     force: bool = False,
     graceful: bool = False,
-    graph: GraphDatabase = None,
+    graph: Optional[GraphDatabase] = None,
+    is_local: bool = False,
 ) -> tuple:
-    """Sync image analysis documents into graph."""
+    """Sync reverse solver documents into graph."""
+    if is_local and not document_ids:
+        raise ValueError(
+            "Cannot sync documents from local directory without explicitly specifying a list of documents to be synced"
+        )
+
     if not graph:
         graph = GraphDatabase()
         graph.connect()
 
-    analysis_store = AnalysisResultsStore()
-    analysis_store.connect()
+    if not is_local:
+        revsolver_store = RevSolverResultsStore()
+        revsolver_store.connect()
+
+    processed, synced, skipped, failed = 0, 0, 0, 0
+    for document_id in document_ids or revsolver_store.get_document_listing():
+        processed += 1
+        try:
+            if is_local:
+                _LOGGER.debug("Loading document from a local file: %r", document_id)
+                with open(document_id, "r") as document_file:
+                    document = json.loads(document_file.read())
+            else:
+                _LOGGER.info(
+                    "Syncing reverse solver document from %r with id %r to graph",
+                    revsolver_store.ceph.host,
+                    document_id
+                )
+                document = revsolver_store.retrieve_document(document_id)
+
+            graph.sync_revsolver_result(document)
+            synced += 1
+        except Exception:
+            if not graceful:
+                raise
+
+            _LOGGER.exception("Failed to sync reverse solver result with document id %r", document_id)
+            failed += 1
+
+    return processed, synced, skipped, failed
+
+
+def sync_analysis_documents(
+    document_ids: Optional[List[str]] = None,
+    force: bool = False,
+    graceful: bool = False,
+    graph: Optional[GraphDatabase] = None,
+    is_local: bool = False,
+) -> tuple:
+    """Sync image analysis documents into graph."""
+    if is_local and not document_ids:
+        raise ValueError(
+            "Cannot sync documents from local directory without explicitly specifying a list of documents to be synced"
+        )
+
+    if not graph:
+        graph = GraphDatabase()
+        graph.connect()
+
+    if not is_local:
+        analysis_store = AnalysisResultsStore()
+        analysis_store.connect()
 
     processed, synced, skipped, failed = 0, 0, 0, 0
     for document_id in document_ids or analysis_store.get_document_listing():
         processed += 1
 
-        if force or not graph.analysis_document_id_exist(document_id):
-            _LOGGER.info(
-                f"Syncing analysis document from {analysis_store.ceph.host} "
-                f"with id {document_id!r} to graph"
-            )
-
+        if force or not graph.analysis_document_id_exist(os.path.basename(document_id)):
             try:
-                document = analysis_store.retrieve_document(document_id)
+                if is_local:
+                    _LOGGER.debug("Loading document from a local file: %r", document_id)
+                    with open(document_id, "r") as document_file:
+                        document = json.loads(document_file.read())
+                else:
+                    _LOGGER.info(
+                        "Syncing analysis document from %r with id %r to graph", analysis_store.ceph.host, document_id
+                    )
+                    document = analysis_store.retrieve_document(document_id)
+
                 graph.sync_analysis_result(document)
                 synced += 1
             except Exception:
@@ -162,32 +243,100 @@ def sync_analysis_documents(
     return processed, synced, skipped, failed
 
 
-def sync_package_analysis_documents(
-    document_ids: list = None,
+def sync_build_log_analysis_documents(
+    document_ids: Optional[List[str]] = None,
     force: bool = False,
     graceful: bool = False,
-    graph: GraphDatabase = None,
+    graph: Optional[GraphDatabase] = None,
+    is_local: bool = False,
 ) -> tuple:
-    """Sync package analysis documents into graph."""
+    """Sync build log analysis documents into graph."""
+    if is_local and not document_ids:
+        raise ValueError(
+            "Cannot sync documents from local directory without explicitly specifying a list of documents to be synced"
+        )
+
     if not graph:
         graph = GraphDatabase()
         graph.connect()
 
-    package_analysis_store = PackageAnalysisResultsStore()
-    package_analysis_store.connect()
+    if not is_local:
+        build_log_analysis_store = BuildLogsAnalysisResultsStore()
+        build_log_analysis_store.connect()
+
+    processed, synced, skipped, failed = 0, 0, 0, 0
+    for document_id in document_ids or buildlog_analysis_store.get_document_listing():
+        processed += 1
+
+        if force or not graph.build_log_analysis_document_id_exist(os.path.basename(document_id)):
+            try:
+                if is_local:
+                    _LOGGER.debug("Loading document from a local file: %r", document_id)
+                    with open(document_id, "r") as document_file:
+                        document = json.loads(document_file.read())
+                else:
+                    _LOGGER.info(
+                        "Syncing build log analysis document from %r with id %r to graph",
+                        build_log_analysis_store.ceph.host,
+                        document_id,
+                    )
+                    document = build_log_analysis_store.retrieve_document(document_id)
+                # Analysis results with no information are not required
+                if document["result"]["build_breaker"]:
+                    graph.sync_build_log_analysis_result(document)
+                    synced += 1
+            except Exception:
+                if not graceful:
+                    raise
+
+                _LOGGER.exception("Failed to sync build log analysis result with document id %r", document_id)
+                failed += 1
+        else:
+            _LOGGER.info("Sync of build log analysis document with id %r skipped - already synced", document_id)
+            skipped += 1
+
+    return processed, synced, skipped, failed
+
+
+def sync_package_analysis_documents(
+    document_ids: Optional[List[str]] = None,
+    force: bool = False,
+    graceful: bool = False,
+    graph: Optional[GraphDatabase] = None,
+    is_local: bool = False,
+) -> tuple:
+    """Sync package analysis documents into graph."""
+    if is_local and not document_ids:
+        raise ValueError(
+            "Cannot sync documents from local directory without explicitly specifying a list of documents to be synced"
+        )
+
+    if not graph:
+        graph = GraphDatabase()
+        graph.connect()
+
+    if not is_local:
+        package_analysis_store = PackageAnalysisResultsStore()
+        package_analysis_store.connect()
 
     processed, synced, skipped, failed = 0, 0, 0, 0
     for document_id in document_ids or package_analysis_store.get_document_listing():
         processed += 1
 
-        if force or not graph.package_analysis_document_id_exist(document_id):
-            _LOGGER.info(
-                f"Syncing package analysis document from {package_analysis_store.ceph.host} "
-                f"with id {document_id!r} to graph"
-            )
-
+        if force or not graph.package_analysis_document_id_exist(os.path.basename(document_id)):
             try:
-                document = package_analysis_store.retrieve_document(document_id)
+                if is_local:
+                    _LOGGER.debug("Loading document from a local file: %r", document_id)
+                    with open(document_id, "r") as document_file:
+                        document = json.loads(document_file.read())
+                else:
+                    _LOGGER.info(
+                        "Syncing package analysis document from %r with id %r to graph",
+                        package_analysis_store.ceph.host,
+                        document_id,
+                    )
+                    document = package_analysis_store.retrieve_document(document_id)
+
                 graph.sync_package_analysis_result(document)
                 synced += 1
             except Exception:
@@ -204,31 +353,44 @@ def sync_package_analysis_documents(
 
 
 def sync_provenance_checker_documents(
-    document_ids: list = None,
+    document_ids: Optional[List[str]] = None,
     force: bool = False,
     graceful: bool = False,
-    graph: GraphDatabase = None,
+    graph: Optional[GraphDatabase] = None,
+    is_local: bool = False,
 ) -> tuple:
     """Sync provenance check documents into graph."""
+    if is_local and not document_ids:
+        raise ValueError(
+            "Cannot sync documents from local directory without explicitly specifying a list of documents to be synced"
+        )
+
     if not graph:
         graph = GraphDatabase()
         graph.connect()
 
-    provenance_check_store = ProvenanceResultsStore()
-    provenance_check_store.connect()
+    if not is_local:
+        provenance_check_store = ProvenanceResultsStore()
+        provenance_check_store.connect()
 
     processed, synced, skipped, failed = 0, 0, 0, 0
     for document_id in document_ids or provenance_check_store.get_document_listing():
         processed += 1
 
-        if force or not graph.provenance_checker_document_id_exist(document_id):
-            _LOGGER.info(
-                f"Syncing provenance-checker document from {provenance_check_store.ceph.host} "
-                f"with id {document_id!r} to graph"
-            )
-
+        if force or not graph.provenance_checker_document_id_exist(os.path.basename(document_id)):
             try:
-                document = provenance_check_store.retrieve_document(document_id)
+                if is_local:
+                    _LOGGER.debug("Loading document from a local file: %r", document_id)
+                    with open(document_id, "r") as document_file:
+                        document = json.loads(document_file.read())
+                else:
+                    _LOGGER.info(
+                        "Syncing provenance-checker document from %r with id %r to graph",
+                        provenance_check_store.ceph.host,
+                        document_id,
+                    )
+                    document = provenance_check_store.retrieve_document(document_id)
+
                 graph.sync_provenance_checker_result(document)
                 synced += 1
             except Exception:
@@ -245,31 +407,44 @@ def sync_provenance_checker_documents(
 
 
 def sync_dependency_monkey_documents(
-    document_ids: list = None,
+    document_ids: Optional[List[str]] = None,
     force: bool = False,
     graceful: bool = False,
-    graph: GraphDatabase = None,
+    graph: Optional[GraphDatabase] = None,
+    is_local: bool = False,
 ) -> tuple:
     """Sync dependency monkey reports into graph database."""
+    if is_local and not document_ids:
+        raise ValueError(
+            "Cannot sync documents from local directory without explicitly specifying a list of documents to be synced"
+        )
+
     if not graph:
         graph = GraphDatabase()
         graph.connect()
 
-    dependency_monkey_reports_store = DependencyMonkeyReportsStore()
-    dependency_monkey_reports_store.connect()
+    if not is_local:
+        dependency_monkey_reports_store = DependencyMonkeyReportsStore()
+        dependency_monkey_reports_store.connect()
 
     processed, synced, skipped, failed = 0, 0, 0, 0
     for document_id in document_ids or dependency_monkey_reports_store.get_document_listing():
         processed += 1
 
-        if force or not graph.dependency_monkey_document_id_exist(document_id):
-            _LOGGER.info(
-                f"Syncing dependency monkey report document from {dependency_monkey_reports_store.ceph.host} "
-                f"with id {document_id!r} to graph"
-            )
-
+        if force or not graph.dependency_monkey_document_id_exist(os.path.basename(document_id)):
             try:
-                document = dependency_monkey_reports_store.retrieve_document(document_id)
+                if is_local:
+                    _LOGGER.debug("Loading document from a local file: %r", document_id)
+                    with open(document_id, "r") as document_file:
+                        document = json.loads(document_file.read())
+                else:
+                    _LOGGER.info(
+                        f"Syncing dependency monkey report document from %r with id %r to graph",
+                        dependency_monkey_reports_store.ceph.host,
+                        document_id,
+                    )
+                    document = dependency_monkey_reports_store.retrieve_document(document_id)
+
                 graph.sync_dependency_monkey_result(document)
                 synced += 1
             except Exception:
@@ -286,16 +461,27 @@ def sync_dependency_monkey_documents(
 
 
 def sync_inspection_documents(
-    amun_api_url: str,
-    document_ids: list = None,
+    document_ids: Optional[List[str]] = None,
     *,
-    force_sync: bool = False,
+    force: bool = False,
     graceful: bool = False,
-    only_graph_sync: bool = False,
+    graph: Optional[GraphDatabase] = None,
+    amun_api_url: str,
     only_ceph_sync: bool = False,
-    graph: GraphDatabase = None,
+    only_graph_sync: bool = False,
+    is_local: bool = False,
 ) -> tuple:
     """Sync observations made on Amun into graph database."""
+    from amun import get_inspection_build_log
+    from amun import get_inspection_job_log
+    from amun import get_inspection_specification
+    from amun import get_inspection_status
+    from amun import has_inspection_job
+    from amun import is_inspection_finished
+
+    if is_local:
+        raise NotImplementedError("Cannot sync inspection documents from a local file")
+
     if only_graph_sync and only_ceph_sync:
         raise ValueError("At least one of Ceph or Graph should be performed")
 
@@ -312,7 +498,7 @@ def sync_inspection_documents(
     processed, synced, skipped, failed = 0, 0, 0, 0
     for inspection_id in document_ids or dependency_monkey_reports_store.iterate_inspection_ids():
         processed += 1
-        if force_sync or not inspection_store.document_exists(inspection_id):
+        if force or not inspection_store.document_exists(inspection_id):
             finished = is_inspection_finished(amun_api_url, inspection_id)
 
             if finished:
@@ -368,24 +554,27 @@ def sync_inspection_documents(
 
 _HANDLERS_MAPPING = {
     "adviser": sync_adviser_documents,
-    "solver": sync_solver_documents,
-    "package-extract": sync_analysis_documents,
-    "package-analyzer": sync_package_analysis_documents,
-    "provenance-checker": sync_provenance_checker_documents,
+    "build-report": sync_build_log_analysis_documents,
     "dependency-monkey": sync_dependency_monkey_documents,
     "inspection": sync_inspection_documents,
+    "package-analyzer": sync_package_analysis_documents,
+    "package-extract": sync_analysis_documents,
+    "provenance-checker": sync_provenance_checker_documents,
+    "solver": sync_solver_documents,
+    "revsolver": sync_revsolver_documents,
 }
 
 
 def sync_documents(
-    document_ids: list = None,
+    document_ids: Optional[List[str]] = None,
     *,
-    amun_api_url: str = None,
+    amun_api_url: Optional[str] = None,
     force: bool = False,
     graceful: bool = False,
-    graph: GraphDatabase = None,
+    graph: Optional[GraphDatabase] = None,
     inspection_only_graph_sync: bool = False,
     inspection_only_ceph_sync: bool = False,
+    is_local: bool = False,
 ) -> Dict[str, Tuple[int, int, int, int]]:
     """Sync documents based on document type.
 
@@ -400,7 +589,8 @@ def sync_documents(
 
     for document_id in document_ids or [None] * len(_HANDLERS_MAPPING):
         for document_prefix, handler in _HANDLERS_MAPPING.items():
-            if document_id is None or document_id.startswith(document_prefix):
+            # Basename for local syncs, document_id should not have slash otherwise.
+            if document_id is None or os.path.basename(document_id).startswith(document_prefix):
                 to_sync_document_id = [document_id] if document_id is not None else None
                 if handler == sync_inspection_documents:
                     # A special case with additional arguments to obtain results from Amun API.
@@ -413,15 +603,18 @@ def sync_documents(
 
                     stats_change = handler(
                         to_sync_document_id,
+                        amun_api_url=amun_api_url,
                         force=force,
                         graceful=graceful,
                         graph=graph,
-                        amun_api_url=amun_api_url,
-                        inspection_only_ceph_sync=inspection_only_ceph_sync,
-                        inspection_only_graph_sync=inspection_only_graph_sync,
+                        only_ceph_sync=inspection_only_ceph_sync,
+                        only_graph_sync=inspection_only_graph_sync,
+                        is_local=is_local,
                     )
                 else:
-                    stats_change = handler(to_sync_document_id, force=force, graceful=graceful, graph=graph)
+                    stats_change = handler(
+                        to_sync_document_id, force=force, graceful=graceful, graph=graph, is_local=is_local
+                    )
 
                 stats[document_prefix] = tuple(map(sum, zip(stats[document_prefix], stats_change)))
                 if document_id is not None:

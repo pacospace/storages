@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # thoth-storages
-# Copyright(C) 2018, 2019 Fridolin Pokorny
+# Copyright(C) 2018, 2019, 2020 Fridolin Pokorny
 #
 # This program is free software: you can redistribute it and / or modify
 # it under the terms of the GNU General Public License as published by
@@ -14,6 +14,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
+# type: ignore
 
 """This is the tests."""
 
@@ -50,8 +51,8 @@ class ResultBaseTest(StorageBaseTest):
     """The Base Class for Result Tests."""
     def test_get_document_id(self):
         # Make sure we pick document id from right place.
-        document = {'metadata': {'hostname': 'localhost'}}
-        assert ResultStorageBase.get_document_id(document) == 'localhost'
+        document = {'metadata': {'document_id': 'foo'}}
+        assert ResultStorageBase.get_document_id(document) == 'foo'
 
     @pytest.mark.parametrize('document,document_id', StorageBaseTest.get_all_results())
     def test_store_document(self, adapter, document, document_id):
@@ -65,7 +66,7 @@ class ResultBaseTest(StorageBaseTest):
         assert adapter.store_document(document) == document_id
 
     def test_assertion_error(self):
-        """Test assertion error if a developer does not provide RESULT_TYPE."""
+        """Test assertion error if a developer RESULT_TYPE is empty."""
         with pytest.raises(AssertionError):
             ResultStorageBase(deployment_name=_DEPLOYMENT_NAME,prefix=_BUCKET_PREFIX, **CEPH_INIT_KWARGS)
 

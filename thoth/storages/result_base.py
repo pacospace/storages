@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # thoth-storages
-# Copyright(C) 2018, 2019 Fridolin Pokorny
+# Copyright(C) 2018, 2019, 2020 Fridolin Pokorny
 #
 # This program is free software: you can redistribute it and / or modify
 # it under the terms of the GNU General Public License as published by
@@ -24,13 +24,14 @@ from .base import StorageBase
 from .ceph import CephStore
 from .result_schema import RESULT_SCHEMA
 from .exceptions import SchemaError
+from .exceptions import NoDocumentIdError
 
 
 class ResultStorageBase(StorageBase):
     """Adapter base for storing results."""
 
     # Type of results to distinguish them based on prefix on Ceph.
-    RESULT_TYPE = None
+    RESULT_TYPE = ""
     # Use core analyzers schema as default one, derived classes can adjust this.
     SCHEMA = RESULT_SCHEMA
 
@@ -51,8 +52,8 @@ class ResultStorageBase(StorageBase):
         explicitly.
         """
         assert (
-            self.RESULT_TYPE is not None
-        ), "Make sure you define RESULT_TYPE in derived classes to distinguish between adapter type instances."
+            self.RESULT_TYPE
+        ), "Make sure RESULT_TYPE in derived classes to distinguish between adapter type instances is non-empty."
 
         self.deployment_name = deployment_name or os.environ["THOTH_DEPLOYMENT_NAME"]
         self.prefix = "{}/{}/{}".format(
@@ -69,7 +70,11 @@ class ResultStorageBase(StorageBase):
         # Note we need to return job id here - the last part delimited by dash
         # is used for specifying pod that runs for the given job. We need job
         # id to be returned (remove pod specific part).
-        return document["metadata"]["hostname"].rsplit("-", maxsplit=1)[0]
+        document_id = document["metadata"].get("document_id")
+        if not document_id:
+            raise NoDocumentIdError("No document id is present in metadata")
+
+        return document_id
 
     def is_connected(self) -> bool:
         """Check if the given database adapter is in connected state."""
@@ -98,6 +103,11 @@ class ResultStorageBase(StorageBase):
         document_id = self.get_document_id(document)
         self.ceph.store_document(document, document_id)
         return document_id
+
+    def store_file(self, file_path: str, file_id: str) -> str:
+        """Store the given file in Ceph."""
+        self.ceph.store_file(file_path, file_id)
+        return file_id
 
     def retrieve_document(self, document_id: str) -> dict:
         """Retrieve a document from Ceph by its id."""

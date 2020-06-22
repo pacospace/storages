@@ -29,7 +29,8 @@
       }
     },
     "duration": 32,
-    "hostname": "fridex-thoth-package-extract-tensorflow-serving-s2i-d2gsr",
+    "hostname": "localhost",
+    "document_id": "fridex-thoth-package-extract-tensorflow-serving-s2i",
     "python": {
       "api_version": 1013,
       "implementation_name": "cpython",
@@ -38,6 +39,19 @@
       "minor": 6,
       "releaselevel": "final",
       "serial": 0
+    },
+    "thoth_deployment_name": "thoth-prod",
+    "os_release": {
+      "id": "fedora",
+      "name": "Fedora",
+      "platform_id": "platform:f30",
+      "redhat_bugzilla_product": "Fedora",
+      "redhat_bugzilla_product_version": "30",
+      "redhat_support_product": "Fedora",
+      "redhat_support_product_version": "30",
+      "variant_id": "workstation",
+      "version": "30 (Workstation Edition)",
+      "version_id": "30"
     },
     "timestamp": 1539685862
   },

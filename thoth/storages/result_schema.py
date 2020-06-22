@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # thoth-storages
-# Copyright(C) 2018, 2019 Fridolin Pokorny
+# Copyright(C) 2018, 2019, 2020 Fridolin Pokorny
 #
 # This program is free software: you can redistribute it and / or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,6 +18,7 @@
 """Schema definition for analyzer results."""
 
 from voluptuous import Required
+from voluptuous import Optional
 from voluptuous import Schema
 
 from thoth.common import parse_datetime
@@ -56,6 +57,21 @@ DISTRIBUTION_SCHEMA = Schema(
     }
 )
 
+OS_RELEASE_SCHEMA = Schema(
+    {
+        Optional("redhat_bugzilla_product"): str,
+        Optional("redhat_bugzilla_product_version"): str,
+        Optional("redhat_support_product"): str,
+        Optional("redhat_support_product_version"): str,
+        Optional("variant_id"): str,
+        Required("id"): str,
+        Required("name"): str,
+        Required("platform_id"): str,
+        Required("version_id"): str,
+        Required("version"): str,
+    }
+)
+
 
 # Metadata about results produced by analyzers.
 METADATA_SCHEMA = Schema(
@@ -65,9 +81,12 @@ METADATA_SCHEMA = Schema(
         Required("arguments"): dict,
         Required("datetime"): Datetime(),
         Required("distribution"): DISTRIBUTION_SCHEMA,
+        Required("document_id"): str,
         Required("duration"): int,
         Required("hostname"): str,
+        Required("os_release"): OS_RELEASE_SCHEMA,
         Required("python"): PYTHON_SCHEMA,
+        Required("thoth_deployment_name"): str,
         Required("timestamp"): int,
     }
 )

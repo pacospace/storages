@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # thoth-storages
-# Copyright(C) 2018, 2019 Fridolin Pokorny
+# Copyright(C) 2018, 2019, 2020 Fridolin Pokorny
 #
 # This program is free software: you can redistribute it and / or modify
 # it under the terms of the GNU General Public License as published by
@@ -62,6 +62,11 @@ class CephStore(StorageBase):
         for obj in self._s3.Bucket(self.bucket).objects.filter(Prefix=self.prefix).all():
             yield obj.key[len(self.prefix) :]  # Ignore PycodestyleBear (E203)
 
+    def store_file(self, document_path: str, document_id: str) -> dict:
+        """Store a file on Ceph."""
+        response = self._s3.Object(self.bucket, f"{self.prefix}{document_id}").upload_file(Filename=document_path)
+        return response
+
     @staticmethod
     def dict2blob(dictionary: dict) -> bytes:
         """Encode a dictionary to a blob so it can be stored on Ceph."""
@@ -72,6 +77,10 @@ class CephStore(StorageBase):
         put_kwargs = {"Body": blob}
         response = self._s3.Object(self.bucket, f"{self.prefix}{object_key}").put(**put_kwargs)
         return response
+
+    def delete(self, object_key: str) -> None:
+        """Delete the given object from Ceph."""
+        self._s3.Object(self.bucket, f"{self.prefix}{object_key}").delete()
 
     def store_document(self, document: dict, document_id: str) -> dict:
         """Store a document (dict) onto Ceph."""

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # thoth-storages
-# Copyright(C) 2019 Fridolin Pokorny
+# Copyright(C) 2019, 2020 Fridolin Pokorny
 #
 # This program is free software: you can redistribute it and / or modify
 # it under the terms of the GNU General Public License as published by
@@ -19,8 +19,13 @@
 
 import attr
 import abc
+import logging
 
 from sqlalchemy.engine import Engine
+
+from ..exceptions import NotConnected
+
+_LOGGER = logging.getLogger(__name__)
 
 
 @attr.s(slots=True)
@@ -28,7 +33,7 @@ class SQLBase:
     """A base class for implementing SQL based databases using SQLAlchemy."""
 
     _engine = attr.ib(type=Engine, default=None)
-    _session = attr.ib(default=None)
+    _sessionmaker = attr.ib(default=None)
 
     _DECLARATIVE_BASE = None
 
@@ -43,12 +48,16 @@ class SQLBase:
     def disconnect(self):
         """Disconnect from the connected database."""
         if not self.is_connected():
-            raise ValueError("Cannot disconnect, the adapter is not connected")
+            raise NotConnected("Cannot disconnect, the adapter is not connected")
 
-        if self._session is not None:
-            self._session = None
+        if self._sessionmaker is not None:
+            self._sessionmaker = None
 
-        # self._engine.dispose()
+        try:
+            self._engine.dispose()
+        except Exception as exc:
+            _LOGGER.warning("Failed to dispose engine: %s", str(exc))
+            pass
         self._engine = None
 
     @abc.abstractmethod
@@ -58,11 +67,6 @@ class SQLBase:
     def drop_all(self) -> None:
         """Drop all content stored in the database."""
         if not self.is_connected():
-            raise ValueError("Cannot initialize schema: the adapter is not connected yet")
+            raise NotConnected("Cannot initialize schema: the adapter is not connected yet")
 
         self._DECLARATIVE_BASE.metadata.drop_all(self._engine)
-
-    def __del__(self) -> None:
-        """Disconnect properly on object destruction."""
-        if self.is_connected():
-            self.disconnect()

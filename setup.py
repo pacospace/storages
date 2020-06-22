@@ -32,7 +32,18 @@ def get_version():
 class Test(TestCommand):
     """Introduce test command to run testsuite using pytest."""
 
-    _IMPLICIT_PYTEST_ARGS = ['tests/', '--timeout=2', '--cov=./thoth', '--capture=no', '--verbose', '-l', '-s', '-vv']
+    _IMPLICIT_PYTEST_ARGS = [
+        'tests/',
+        '--timeout=2',
+        '--cov=./thoth',
+        # '--mypy',
+        'thoth/',
+        '--capture=no',
+        '--verbose',
+        '-l',
+        '-s',
+        '-vv'
+    ]
 
     user_options = [
         ('pytest-args=', 'a', "Arguments to pass into py.test")
@@ -73,6 +84,7 @@ setup(
     ],
     package_data={
         'thoth.storages': [
+            "py.typed",
             os.path.join('data', 'alembic.ini'),
             os.path.join('data', 'alembic', 'script.py.mako'),
             os.path.join('data', 'alembic', 'env.py'),
@@ -86,6 +98,9 @@ setup(
     entry_points={
         'console_scripts': ['thoth-storages=thoth.storages.cli:cli']
     },
+    url='https://github.com/thoth-station/storages',
+    maintainer='Francesco Murdaca',
+    maintainer_email='fmurdaca@redhat.com',
     command_options={
         'build_sphinx': {
             'version': ('setup.py', VERSION),
